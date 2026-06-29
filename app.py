@@ -34,14 +34,14 @@ def extract_pdf_text(file):
         text += page.extract_text() or ""
     return text
 
-# 2. Pemrosesan Multimodal (Teks CV + Gambar Lowongan + Instruksi)
+# 2. Pemrosesan Multimodal dengan Perbaikan Jalur Model (Explicit Model Path)
 def process_career_application(cv_content, company_name, position, company_info, job_image):
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    # PERBAIKAN: Menggunakan 'models/gemini-1.5-flash' untuk mencegah error NotFound
+    model = genai.GenerativeModel('models/gemini-1.5-flash')
     
-    # Menyusun isi kontainer input untuk Gemini
     contents = []
     
-    # Jika ada gambar screenshot lowongan, masukkan ke dalam analisis multimodal
+    # Memproses gambar jika diunggah oleh pengguna
     if job_image is not None:
         img = Image.open(job_image)
         contents.append(img)
@@ -101,7 +101,7 @@ st.caption("Aplikasi cerdas penganalisis kecocokan karir menggunakan berkas CV d
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("📥 Data Input Aplikasi")
+    st.subheader("📥 Data Input Application")
     uploaded_file = st.file_uploader("1. Upload CV Lama Anda (PDF)", type=["pdf"])
     uploaded_image = st.file_uploader("2. Upload Foto/Screenshot Lowongan Kerja (Opsional)", type=["png", "jpg", "jpeg"])
     
@@ -126,10 +126,8 @@ with col2:
             with st.spinner("AI sedang menimbang kompetensi dan menganalisis berkas..."):
                 cv_text = extract_pdf_text(uploaded_file)
                 
-                # Eksekusi logika kognitif AI
                 result = process_career_application(cv_text, company_name, position, company_info, uploaded_image)
                 
-                # Cek status penolakan sistem
                 if result.strip().startswith("[REJECT]"):
                     st.error("🚨 Pengajuan Ditolak oleh Sistem AI (Kualifikasi Tidak Sinkron)")
                     st.write(result)
