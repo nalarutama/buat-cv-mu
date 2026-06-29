@@ -416,7 +416,7 @@ with col_output:
                 company_name=company_name,
                 position=position,
                 extra_info=extra_info,
-                job_image=uploaded_cv if uploaded_jd_image is None else uploaded_jd_image,
+                job_image=uploaded_jd_image if uploaded_jd_image is not None else None,
                 api_key=manual_api_key if manual_api_key else None
             )
 
@@ -473,3 +473,4 @@ if supabase:
             st.info("Belum ada riwayat lamaran.")
 else:
     st.caption("⚠️ Hubungkan Supabase untuk melihat riwayat lamaran.")
+                
