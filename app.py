@@ -3,26 +3,23 @@ import pandas as pd
 import google.generativeai as genai
 import os
 from PyPDF2 import PdfReader
+from PIL import Image
 
 # 1. Konfigurasi API Key Gemini
 if "GEMINI_API_KEY" in os.environ:
     genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 elif "GEMINI_API_KEY" in st.secrets:
-    # Digunakan jika Anda dideploy di Streamlit Community Cloud
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-else:
-    st.warning("Catatan: Pastikan Anda telah memasukkan GEMINI_API_KEY di pengaturan Cloud Environment Anda.")
 
-# 2. Database Lokal/Cloud kompatibel Excel
 DB_FILE = "ats_cv_database.csv"
 
-def save_to_database(company, position, cl_output, raw_result):
+def save_to_database(company, position, status, output):
     new_data = {
         "Timestamp": [pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")],
         "Company Name": [company],
         "Target Position": [position],
-        "Generated Cover Letter": [cl_output],
-        "Full AI Output": [raw_result]
+        "Status AI": [status],
+        "Full AI Output": [output]
     }
     df_new = pd.DataFrame(new_data)
     if not os.path.isfile(DB_FILE):
@@ -37,91 +34,112 @@ def extract_pdf_text(file):
         text += page.extract_text() or ""
     return text
 
-# 3. Prompt Engineering Teroptimasi ATS
-def generate_ats_career_assets(cv_content, company_name, position, company_info=""):
+# 2. Pemrosesan Multimodal (Teks CV + Gambar Lowongan + Instruksi)
+def process_career_application(cv_content, company_name, position, company_info, job_image):
     model = genai.GenerativeModel('gemini-1.5-flash')
     
+    # Menyusun isi kontainer input untuk Gemini
+    contents = []
+    
+    # Jika ada gambar screenshot lowongan, masukkan ke dalam analisis multimodal
+    if job_image is not None:
+        img = Image.open(job_image)
+        contents.append(img)
+        image_instruction = "Analisis juga gambar screenshot lowongan kerja yang dilampirkan untuk mengekstrak kualifikasi kunci."
+    else:
+        image_instruction = "Tidak ada gambar lowongan yang dilampirkan, andalkan teks input manual."
+
     prompt = f"""
-    You are an expert ATS (Applicant Tracking System) Optimization Engineer and Corporate Recruiter. 
-    Analyze the provided User CV and tailor it perfectly to pass parsing algorithms for the target company and position.
+    You are an elite corporate recruiter and critical ATS career coach. 
+    Analyze the User's CV and match it against the Target Company and Target Position.
 
     TARGET COMPANY: {company_name}
     TARGET POSITION: {position}
-    COMPANY RESEARCH CONTEXT: {company_info}
+    MANUAL COMPANY/JOB INFO: {company_info}
+    {image_instruction}
+
     USER CV RAW TEXT:
     {cv_content}
 
     ------------------
-    CRITICAL INSTRUCTIONS FOR ATS COMPLIANCE:
-    1. ATS systems require clear, standard section headings ("Work Experience", "Skills", "Education", "Summary"). Do not use creative titles.
-    2. ATS systems scan for specific keywords. Identify high-frequency keywords related to {position} and embed them naturally.
-    3. No multi-column layouts, tables, images, or progress bars should be recommended. Output must be purely linear text structured top-to-bottom.
+    STEP 1: GATEKEEPING & MATCHING ANALYSIS (CRITICAL)
+    Evaluate the compatibility strictly. Do not be a 'yes-man'.
+    - CASE A (HIGHLY DEVIATED): If the user's CV qualifications and experience are completely unrelated, impossible, or drastically mismatch the target role, you MUST reject the request. Start your response immediately with [REJECT] followed by a sharp, professional explanation of why it is rejected and what type of roles they should target instead. Do not generate the CV or cover letter.
+    - CASE B (SLIGHT MISMATCH / LACK OF EXPERIENCE): If there is a gap but it's bridgeable, study the CV deeply. Highlight transferable skills, adapt phrasing to match the industry keywords, and craft the content to fit the specification.
+    - CASE C (SMOOTH MATCH): If it matches well, proceed smoothly to build high-impact assets.
 
-    REQUIRED OUTPUTS:
+    ------------------
+    STEP 2: REQUIRED OUTPUT FORMAT (Only if NOT rejected):
+    If the application is feasible (Case B or C), provide:
+
+    [COMMENTARY]
+    Provide a brief, honest evaluation regarding the alignment between the CV and the target role.
 
     [OUTPUT 1: ATS_OPTIMIZED_ENGLISH_CV]
-    Rewrite the core sections of the user's CV in professional, high-impact ENGLISH. Optimize the "Summary", "Core Competencies/Skills", and "Professional Experience" using action verbs and quantifiable metrics (e.g., increased efficiency by X%, managed Y projects). Format this as clean, copy-pasteable text that an ATS scanner can read flawlessly.
+    Linear structured CV adjustments in professional English.
 
     [OUTPUT 2: ATS_OPTIMIZED_INDONESIAN_CV]
-    Translate and adapt the exact same ATS-optimized structure into professional INDONESIAN, adhering to modern professional syntax.
+    Linear structured CV adjustments in professional Indonesian.
 
     [OUTPUT 3: CASUAL_PROFESSIONAL_COVER_LETTER]
-    Write a short cover letter in INDONESIAN.
-    - Tone: Professional but casual/approachable (tidak terlalu kaku, gunakan gaya bahasa modern yang persuasif).
-    - CONSTRAINT: It MUST be under 500 characters total. Keep it brief, high-impact, and conversational.
+    Cover letter in Indonesian, professional yet casual tone, STRICTLY under 500 characters.
 
     [OUTPUT 4: HR_INTERVIEW_SIMULATION]
-    Generate an interactive HR Interview prep block based on this tailored CV:
-    - Point 1: "Tell me about yourself" question customized to frame the user as the perfect match for {company_name}. Provide bullet-point answer framework.
-    - Point 2 to 5: Four general HR screening questions with actionable bullet-point talking points for the user to develop.
+    - Point 1: Customized "Tell me about yourself" framework.
+    - Points 2-5: General and specific HR screening questions with bullet-pointed response strategies.
     """
+    contents.append(prompt)
     
-    response = model.generate_content(prompt)
+    response = model.generate_content(contents)
     return response.text
 
-# 4. Antarmuka Web App (Streamlit Layout)
-st.set_page_config(page_title="Cloud ATS Optimizer", layout="wide")
-st.title("🌐 Cloud AI CV & ATS Optimizer")
-st.caption("Aplikasi berbasis web untuk transformasi CV standar menjadi ATS-friendly dan pembuatan Cover Letter.")
+# 3. Antarmuka Web App Streamlit
+st.set_page_config(page_title="Cloud ATS Smart Optimizer", layout="wide")
+st.title("🌐 Smart AI CV & ATS Gatekeeper")
+st.caption("Aplikasi cerdas penganalisis kecocokan karir menggunakan berkas CV dan gambar lowongan kerja.")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("📥 Data Input (Tanpa Instalasi)")
-    uploaded_file = st.file_uploader("Upload CV Lama Anda (PDF)", type=["pdf"])
-    company_name = st.text_input("Nama Perusahaan Target (Contoh: GoTo, Telkom)")
-    position = st.text_input("Posisi/Role Terperinci")
+    st.subheader("📥 Data Input Aplikasi")
+    uploaded_file = st.file_uploader("1. Upload CV Lama Anda (PDF)", type=["pdf"])
+    uploaded_image = st.file_uploader("2. Upload Foto/Screenshot Lowongan Kerja (Opsional)", type=["png", "jpg", "jpeg"])
     
-    manual_mode = st.checkbox("Saya ingin menambahkan data riset perusahaan secara manual")
-    company_info = ""
-    if manual_mode:
-        company_info = st.text_area("Tulis info tambahan produk/budaya kerja perusahaan di sini:")
-
-    # Input API Key opsional di UI jika tidak di-set di environment cloud
-    ui_api_key = st.text_input("Masukkan Gemini API Key Anda (Jika belum dikonfigurasi di cloud system)", type="password")
+    st.markdown("---")
+    st.caption("Lengkapi detail di bawah jika tidak tertera jelas di gambar lowongan:")
+    company_name = st.text_input("Nama Perusahaan Target", value="Belum Diketahui")
+    position = st.text_input("Posisi/Role Terperinci", value="Belum Diketahui")
+    company_info = st.text_area("Info Tambahan / Catatan Khusus Kerja:")
+    
+    ui_api_key = st.text_input("Masukkan Gemini API Key Anda (Pintu Darurat Fallback)", type="password")
     if ui_api_key:
         genai.configure(api_key=ui_api_key)
 
-    submit_btn = st.button("Generate & Optimasi ATS", type="primary")
+    submit_btn = st.button("Analisis & Optimasi Aplikasi", type="primary")
 
 with col2:
-    st.subheader("📤 Hasil Optimasi ATS & Database")
+    st.subheader("📤 Hasil Analisis & Generasi Dokumen")
     if submit_btn:
-        if not uploaded_file or not company_name or not position:
-            st.warning("Harap isi file CV, Nama Perusahaan, dan Posisi Target.")
+        if not uploaded_file:
+            st.warning("Mohon unggah dokumen file CV Anda terlebih dahulu.")
         else:
-            with st.spinner("Sistem sedang memproses data teks untuk ramah ATS..."):
+            with st.spinner("AI sedang menimbang kompetensi dan menganalisis berkas..."):
                 cv_text = extract_pdf_text(uploaded_file)
-                output_content = generate_ats_career_assets(cv_text, company_name, position, company_info)
                 
-                # Ekstrak perkiraan cover letter untuk disimpan ke database
-                save_to_database(company_name, position, "Lihat detail output", output_content)
+                # Eksekusi logika kognitif AI
+                result = process_career_application(cv_text, company_name, position, company_info, uploaded_image)
                 
-                st.success("Sukses! Data Anda telah ditambahkan ke database cloud lokal (`ats_cv_database.csv`).")
-                st.markdown(output_content)
-                
-                # Fitur tambahan cloud untuk download file database langsung dari website
+                # Cek status penolakan sistem
+                if result.strip().startswith("[REJECT]"):
+                    st.error("🚨 Pengajuan Ditolak oleh Sistem AI (Kualifikasi Tidak Sinkron)")
+                    st.write(result)
+                    save_to_database(company_name, position, "REJECTED", result)
+                else:
+                    st.success("✅ Analisis Berhasil! Aset karir Anda telah siap.")
+                    st.markdown(result)
+                    save_to_database(company_name, position, "APPROVED", result)
+                    
                 if os.path.exists(DB_FILE):
                     df_download = pd.read_csv(DB_FILE)
                     csv_data = df_download.to_csv(index=False).encode('utf-8')
-                    st.download_button("📥 Unduh Database Excel/CSV Anda", data=csv_data, file_name="my_career_database.csv", mime="text/csv")
+                    st.download_button("📥 Unduh Log Database Karir (.csv)", data=csv_data, file_name="smart_career_database.csv", mime="text/csv")
