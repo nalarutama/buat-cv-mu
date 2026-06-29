@@ -2,7 +2,8 @@ import re
 import html
 import streamlit as st
 import pandas as pd
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from datetime import datetime
 from PyPDF2 import PdfReader
 from docx import Document
@@ -346,11 +347,7 @@ def analyze_application(cv_text, company_name, position, extra_info, job_image=N
     if not key:
         return "[ERROR] Gemini API Key tidak ditemukan."
 
-    genai.configure(api_key=key)
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
-        system_instruction=SYSTEM_PROMPT
-    )
+    client = genai.Client(api_key=key)
 
     user_prompt = f"""
 DATETIME SEKARANG: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
@@ -372,11 +369,17 @@ TEKS CV KANDIDAT:
     contents.append(user_prompt)
 
     try:
-        response = model.generate_content(
-            contents,
-            generation_config=genai.GenerationConfig(temperature=0.5, max_output_tokens=8192)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                temperature=0.5,
+                max_output_tokens=32768,
+                thinking_config=types.ThinkingConfig(thinking_budget=8192),
+            ),
         )
-        return response.text
+        return response.text or "[ERROR] Model tidak mengembalikan teks (kemungkinan diblokir filter keamanan)."
     except Exception as e:
         return f"[ERROR dari Gemini API]: {str(e)}"
 
@@ -389,7 +392,7 @@ with st.sidebar:
     st.markdown("---")
     manual_api_key = st.text_input("Gemini API Key (Fallback)", type="password")
     st.markdown("---")
-    st.caption("v4.2 · Neumorphic · Dark/Light · ATS Score · PDF")
+    st.caption("v5.1 · google-genai SDK · Thinking Budget · Neumorphic")
     st.success("✓ Supabase terhubung") if supabase else st.warning("⚠️ Supabase tidak terhubung")
 
 theme = "dark" if dark_mode else "light"
