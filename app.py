@@ -222,7 +222,7 @@ def analyze_application(
     genai.configure(api_key=key_to_use)
 
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-pro",
+        model_name="gemini-2.5-flash",
         system_instruction=SYSTEM_PROMPT
     )
 
@@ -473,4 +473,3 @@ if supabase:
             st.info("Belum ada riwayat lamaran.")
 else:
     st.caption("⚠️ Hubungkan Supabase untuk melihat riwayat lamaran.")
-                
