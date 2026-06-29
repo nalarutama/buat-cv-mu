@@ -389,7 +389,7 @@ with st.sidebar:
     st.markdown("---")
     manual_api_key = st.text_input("Gemini API Key (Fallback)", type="password")
     st.markdown("---")
-    st.caption("v4.1 · Neumorphic · Dark/Light · ATS Score · PDF")
+    st.caption("v4.2 · Neumorphic · Dark/Light · ATS Score · PDF")
     st.success("✓ Supabase terhubung") if supabase else st.warning("⚠️ Supabase tidak terhubung")
 
 theme = "dark" if dark_mode else "light"
@@ -499,37 +499,34 @@ st.markdown("""
     .char-ok   { background:#dcd6ff; color:#5b21b6; }
     .char-warn { background:#ffd9d9; color:#b91c1c; }
 
-    /* ===== GRID KARTU IKON 3D GLOSSY ===== */
-    .ico-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 13px; margin: 0.2rem 0 1rem; }
-    .ico-card {
-        display: block; text-align: center; text-decoration: none !important; background: var(--bg);
-        border-radius: 22px; padding: 1.1rem 0.4rem 0.9rem;
-        box-shadow: 6px 6px 13px var(--sd), -6px -6px 13px var(--sl);
+    /* ===== NAV KARTU IKON (berbasis st.button -> tetap dalam sesi, tidak reload) ===== */
+    [class*="st-key-nav_"] button {
+        display: flex !important; flex-direction: column; align-items: center; justify-content: center;
+        min-height: 98px; border-radius: 22px !important; border: none !important;
+        background: var(--bg) !important; color: var(--soft) !important;
+        font-size: 0.76rem !important; font-weight: 600 !important; line-height: 1.2;
+        box-shadow: 6px 6px 13px var(--sd), -6px -6px 13px var(--sl) !important;
         transition: all 0.18s ease; animation: fadeUp 0.4s ease both;
     }
-    .ico-card:hover { transform: translateY(-3px); box-shadow: 9px 9px 18px var(--sd), -9px -9px 18px var(--sl); }
-    .ico-card.active { box-shadow: inset 5px 5px 11px var(--sd), inset -5px -5px 11px var(--sl); }
-    .ico-card:nth-child(1){animation-delay:.02s} .ico-card:nth-child(2){animation-delay:.06s}
-    .ico-card:nth-child(3){animation-delay:.10s} .ico-card:nth-child(4){animation-delay:.14s}
-    .ico-card:nth-child(5){animation-delay:.18s} .ico-card:nth-child(6){animation-delay:.22s}
-    .ico-card:nth-child(7){animation-delay:.26s}
-    .ico-label { display: block; margin-top: 0.6rem; font-size: 0.76rem; font-weight: 600; color: var(--soft) !important; }
-    .ico-card.active .ico-label { color: var(--accent) !important; }
-
-    .ico-badge {
-        width: 54px; height: 54px; margin: 0 auto; border-radius: 50%;
-        display: flex; align-items: center; justify-content: center; font-size: 1.55rem;
+    [class*="st-key-nav_"] button:hover { transform: translateY(-3px); color: var(--accent) !important; }
+    [class*="st-key-nav_"] button[kind="primary"] {
+        color: var(--accent) !important;
+        box-shadow: inset 5px 5px 11px var(--sd), inset -5px -5px 11px var(--sl) !important;
+    }
+    [class*="st-key-nav_"] button::before {
+        display: flex; align-items: center; justify-content: center;
+        width: 50px; height: 50px; border-radius: 50%; margin-bottom: 0.5rem; font-size: 1.45rem;
         box-shadow: 0 8px 15px rgba(40,30,90,0.32), inset 0 -4px 7px rgba(0,0,0,0.18), inset 0 4px 7px rgba(255,255,255,0.55);
         transition: transform 0.18s ease;
     }
-    .ico-card:hover .ico-badge { transform: scale(1.07); }
-    .badge-emerald{ background: radial-gradient(circle at 34% 28%, #6ee7b7, #059669); }
-    .badge-violet { background: radial-gradient(circle at 34% 28%, #c4b5fd, #7c3aed); }
-    .badge-blue   { background: radial-gradient(circle at 34% 28%, #93c5fd, #2563eb); }
-    .badge-coral  { background: radial-gradient(circle at 34% 28%, #fca5a5, #ef4444); }
-    .badge-teal   { background: radial-gradient(circle at 34% 28%, #5eead4, #0d9488); }
-    .badge-amber  { background: radial-gradient(circle at 34% 28%, #fde68a, #f59e0b); }
-    .badge-pink   { background: radial-gradient(circle at 34% 28%, #f9a8d4, #db2777); }
+    [class*="st-key-nav_"] button:hover::before { transform: scale(1.07); }
+    .st-key-nav_ats_score    button::before { content: "▪"; background: radial-gradient(circle at 34% 28%, #6ee7b7, #059669); }
+    .st-key-nav_commentary   button::before { content: "🧠"; background: radial-gradient(circle at 34% 28%, #c4b5fd, #7c3aed); }
+    .st-key-nav_cv_english   button::before { content: "🌐"; background: radial-gradient(circle at 34% 28%, #93c5fd, #2563eb); }
+    .st-key-nav_cv_indonesia button::before { content: "📝"; background: radial-gradient(circle at 34% 28%, #fca5a5, #ef4444); }
+    .st-key-nav_cover_letter button::before { content: "✉️"; background: radial-gradient(circle at 34% 28%, #5eead4, #0d9488); }
+    .st-key-nav_interview    button::before { content: "🤝"; background: radial-gradient(circle at 34% 28%, #fde68a, #f59e0b); }
+    .st-key-nav_dblog        button::before { content: "💾"; background: radial-gradient(circle at 34% 28%, #f9a8d4, #db2777); }
 
     /* ===== ATS GAUGE ===== */
     .gauge-wrap { display:flex; align-items:center; gap:1.5rem; flex-wrap:wrap; margin:0.4rem 0 0.6rem; }
@@ -564,15 +561,13 @@ st.markdown("""
     .stAlert { border-radius:16px; }
 
     /* ===== RESPONSIVE ===== */
-    @media (max-width: 992px) { .ico-grid { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 768px) {
         .block-container { padding-left: 0.8rem; padding-right: 0.8rem; }
         .neo-hero { padding: 1.4rem 1.2rem; } .neo-hero h1 { font-size: 1.3rem; }
         .neo-card { padding: 1.2rem 1.1rem; }
-        .ico-grid { grid-template-columns: repeat(2, 1fr); gap: 11px; }
-        .ico-badge { width: 50px; height: 50px; font-size: 1.4rem; }
+        [class*="st-key-nav_"] button { min-height: 84px; font-size: 0.66rem !important; }
+        [class*="st-key-nav_"] button::before { width: 44px; height: 44px; font-size: 1.25rem; }
     }
-    @media (max-width: 420px) { .ico-grid { grid-template-columns: repeat(2, 1fr); } .ico-label { font-size: 0.7rem; } }
 </style>
 """, unsafe_allow_html=True)
 
@@ -583,6 +578,8 @@ if "result" not in st.session_state:
     st.session_state.result = None
 if "meta" not in st.session_state:
     st.session_state.meta = {}
+if "active_view" not in st.session_state:
+    st.session_state.active_view = "ats_score"
 
 OUTPUT_CARDS = [
     ("ats_score",    "▪", "ATS Score",    "emerald"),
@@ -644,7 +641,7 @@ if analyze_btn:
                 sections = parse_sections(raw_result)
                 st.session_state.result = sections
                 st.session_state.meta = {"company": company_name, "position": position}
-                st.query_params["view"] = "ats_score"
+                st.session_state.active_view = "ats_score"
 
                 if sections["rejected"]:
                     save_to_supabase(company_name, position, "REJECTED", raw_result, "")
@@ -685,21 +682,21 @@ with col_out:
         company = st.session_state.meta.get("company", "")
         today = datetime.now().strftime("%Y%m%d")
 
-        view = st.query_params.get("view", "ats_score")
+        view = st.session_state.active_view
         if view not in VALID_VIEWS:
             view = "ats_score"
 
-        # --- GRID KARTU IKON ---
-        cards_html = '<div class="ico-grid">'
-        for key, icon, label, color in OUTPUT_CARDS:
-            active = " active" if key == view else ""
-            cards_html += (
-                f'<a class="ico-card{active}" href="?view={key}" target="_self">'
-                f'<div class="ico-badge badge-{color}">{icon}</div>'
-                f'<span class="ico-label">{label}</span></a>'
-            )
-        cards_html += '</div>'
-        st.markdown(cards_html, unsafe_allow_html=True)
+        # --- GRID KARTU IKON (st.button: navigasi tetap dalam sesi, TIDAK reload) ---
+        row1 = st.columns(4, gap="small")
+        row2 = st.columns(3, gap="small")
+        slots = row1 + row2
+        for slot, (key, icon, label, color) in zip(slots, OUTPUT_CARDS):
+            with slot:
+                if st.button(label, key=f"nav_{key}",
+                             type="primary" if key == view else "secondary",
+                             use_container_width=True):
+                    st.session_state.active_view = key
+                    st.rerun()
 
         content = res.get(view, "")
 
