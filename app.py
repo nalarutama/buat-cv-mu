@@ -11,6 +11,9 @@ from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 from supabase import create_client, Client
 
+# Konstanta newline char(10) - dipakai agar tidak ada escape sequence di dalam kode
+NL = chr(10)
+
 # ══════════════════════════════════════════════════════
 # KONFIGURASI HALAMAN
 # ══════════════════════════════════════════════════════
@@ -49,16 +52,14 @@ supabase: Client = init_supabase(supabase_url, supabase_key)
 def extract_pdf_text(file) -> str:
     try:
         reader = PdfReader(file)
-        return "
-".join(page.extract_text() or "" for page in reader.pages).strip()
+        return NL.join(page.extract_text() or "" for page in reader.pages).strip()
     except Exception as e:
         return f"[ERROR PDF: {e}]"
 
 def extract_docx_text(file) -> str:
     try:
         doc = Document(file)
-        return "
-".join(p.text for p in doc.paragraphs if p.text.strip()).strip()
+        return NL.join(p.text for p in doc.paragraphs if p.text.strip()).strip()
     except Exception as e:
         return f"[ERROR DOCX: {e}]"
 
@@ -74,9 +75,8 @@ def extract_cv_text(uploaded_file) -> str:
 # EXPORT PDF
 # ══════════════════════════════════════════════════════
 def _strip_md(text: str) -> str:
-    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)          # bold
-    text = re.sub(r"\*(.+?)\*", r"\1", text)              # italic
-    text = re.sub(r"^#{1,6}\s*", "", text, flags=re.M)    # heading
+    text = text.replace("**", "").replace("*", "")     # buang penanda bold/italic
+    text = re.sub("(?m)^#{1,6} *", "", text)           # buang penanda heading
     text = text.replace("•", "-")
     return text
 
@@ -94,8 +94,7 @@ def make_pdf(title: str, body: str) -> bytes:
     pdf.multi_cell(0, 9, _latinize(title), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(2)
     pdf.set_font("Helvetica", size=11)
-    for line in _strip_md(body).split("
-"):
+    for line in _strip_md(body).split(NL):
         line = _latinize(line.rstrip())
         if line.strip() == "":
             pdf.ln(3)
@@ -127,9 +126,13 @@ def fetch_history() -> pd.DataFrame:
     if not supabase:
         return pd.DataFrame()
     try:
-        res = supabase.table("cv_applications") \
-            .select("timestamp,company_name,target_position,status,cover_letter_snippet") \
-            .order("timestamp", desc=True).limit(50).execute()
+        res = (
+            supabase.table("cv_applications")
+            .select("timestamp,company_name,target_position,status,cover_letter_snippet")
+            .order("timestamp", desc=True)
+            .limit(50)
+            .execute()
+        )
         return pd.DataFrame(res.data)
     except Exception:
         return pd.DataFrame()
@@ -319,20 +322,19 @@ def parse_sections(raw: str) -> dict:
 
 def parse_ats(text: str):
     score = 0
-    m = re.search(r"SCORE:\s*(\d{1,3})", text)
+    m = re.search("SCORE: *([0-9]{1,3})", text)
     if m:
         score = max(0, min(100, int(m.group(1))))
 
     def grab(label):
-        mm = re.search(label + r":\s*(.+)", text)
+        mm = re.search(label + ": *(.+)", text)
         if not mm:
             return []
-        return [x.strip() for x in re.split(r"[,
-]", mm.group(1)) if x.strip()][:12]
+        return [x.strip() for x in re.split("[," + NL + "]", mm.group(1)) if x.strip()][:12]
 
     matched = grab("KEYWORD_COCOK")
     missing = grab("KEYWORD_HILANG")
-    sm = re.search(r"RINGKASAN:\s*(.+)", text)
+    sm = re.search("RINGKASAN: *(.+)", text)
     summary = sm.group(1).strip() if sm else ""
     return score, summary, matched, missing
 
@@ -387,7 +389,7 @@ with st.sidebar:
     st.markdown("---")
     manual_api_key = st.text_input("Gemini API Key (Fallback)", type="password")
     st.markdown("---")
-    st.caption("v4.0 · Neumorphic · Dark/Light · ATS Score · PDF")
+    st.caption("v4.1 · Neumorphic · Dark/Light · ATS Score · PDF")
     st.success("✓ Supabase terhubung") if supabase else st.warning("⚠️ Supabase tidak terhubung")
 
 theme = "dark" if dark_mode else "light"
@@ -660,7 +662,7 @@ with col_out:
         <div class="neo-card empty-wrap">
             <div class="empty-icon">🪄</div>
             <p style="font-weight:700; margin:0.8rem 0 0.2rem; font-size:1.05rem;">Siap mengoptimalkan karirmu</p>
-            <p style="font-size:0.85rem; color:var(--muted);">Isi form di kiri lalu klik <b>Analisis &amp; Optimalkan</b>.</p>
+            <p style="font-size:0.85rem; color:var(--muted);">Isi form di kiri lalu klik <b>Analisis & Optimalkan</b>.</p>
             <div class="feat-row">
                 <span class="feat-chip">▪ Skor ATS</span>
                 <span class="feat-chip">🧠 Analisis HR</span>
