@@ -103,6 +103,79 @@ def make_pdf(title: str, body: str) -> bytes:
             pdf.multi_cell(0, 6, line, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     return bytes(pdf.output())
 
+BULLET = chr(183)  # middot, aman untuk font latin-1
+
+def _is_full_bold(s):
+    return s.startswith("**") and s.endswith("**") and len(s) > 4 and "|" not in s
+
+def _is_bullet(s):
+    return s.startswith("- ") or s.startswith(chr(8226)) or (s.startswith("* ") and not s.startswith("**"))
+
+def make_cv_pdf(text: str) -> bytes:
+    pdf = FPDF(format="A4")
+    pdf.set_margins(16, 14, 16)
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.add_page()
+    epw = pdf.epw
+    expect_contact = False
+
+    for raw in text.split(NL):
+        s = raw.strip()
+        if s == "":
+            if not expect_contact:
+                pdf.ln(2)
+            continue
+
+        # NAMA (judul besar di tengah)
+        if s.startswith("# "):
+            pdf.set_font("Helvetica", "B", 24); pdf.set_text_color(20, 20, 20)
+            pdf.multi_cell(0, 11, _latinize(s[2:].replace("**", "").strip()).upper(), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            expect_contact = True
+            continue
+
+        # KONTAK (baris tepat setelah nama)
+        if expect_contact:
+            expect_contact = False
+            pdf.set_font("Helvetica", "", 10); pdf.set_text_color(70, 70, 70)
+            for part in s.replace("**", "").split("|"):
+                if part.strip():
+                    pdf.multi_cell(0, 5, _latinize(part.strip()), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.ln(1)
+            continue
+
+        # BARIS JUDUL + TANGGAL (kiri/kanan, pakai pipe)
+        if "|" in s:
+            left, right = s.split("|", 1)
+            pdf.set_text_color(20, 20, 20); pdf.set_font("Helvetica", "B", 10.5)
+            pdf.cell(epw * 0.70, 5.5, _latinize(left.replace("**", "").replace("#", "").strip()), new_x=XPos.RIGHT, new_y=YPos.TOP)
+            pdf.cell(epw * 0.30, 5.5, _latinize(right.replace("**", "").strip()), align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            continue
+
+        # HEADER SECTION (full bold, di tengah + garis bawah)
+        if _is_full_bold(s):
+            pdf.ln(3); pdf.set_font("Helvetica", "B", 12); pdf.set_text_color(20, 20, 20)
+            pdf.multi_cell(0, 6.5, _latinize(s.replace("**", "").strip()).upper(), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            y = pdf.get_y() + 0.5
+            pdf.set_draw_color(60, 60, 60); pdf.set_line_width(0.4)
+            pdf.line(pdf.l_margin, y, pdf.l_margin + epw, y)
+            pdf.ln(2.5)
+            continue
+
+        # BULLET
+        if _is_bullet(s):
+            txt = s.lstrip("-* " + chr(8226)).strip()
+            pdf.set_font("Helvetica", "", 10); pdf.set_text_color(45, 45, 45)
+            pdf.set_x(pdf.l_margin + 2)
+            pdf.cell(4, 5, BULLET, new_x=XPos.RIGHT, new_y=YPos.TOP)
+            pdf.multi_cell(epw - 6, 5, _latinize(txt), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            continue
+
+        # PARAGRAF biasa
+        pdf.set_font("Helvetica", "", 10); pdf.set_text_color(45, 45, 45)
+        pdf.multi_cell(0, 5, _latinize(s.replace("**", "")), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
+    return bytes(pdf.output())
+
 # ══════════════════════════════════════════════════════
 # SUPABASE
 # ══════════════════════════════════════════════════════
@@ -200,33 +273,63 @@ KEYWORD_HILANG: [keyword penting dari lowongan yang BELUM ada di CV, dipisah kom
 
 ---SECTION:CV_ENGLISH---
 
-Buat ATS-Optimized CV dalam Bahasa Inggris yang outstanding. Bukan sekadar list biasa — ini harus membuat rekruter internasional berhenti dan membaca lebih lanjut.
+Buat ATS-Optimized CV dalam Bahasa Inggris. WAJIB ikuti format baris berikut PERSIS (supaya bisa dirender rapi menjadi PDF):
 
-Format LINEAR (tanpa tabel):
+# [Nama Lengkap Kandidat]
+[Nomor Telepon] | [Email] | [Kota/Lokasi]
 
 **PROFESSIONAL SUMMARY**
-[3-4 kalimat yang memukau. Bukan generik. Harus spesifik ke industri/posisi ini. Gunakan angka, pencapaian, dan value proposition yang unik]
+[3-4 kalimat memukau dalam bentuk paragraf, spesifik ke posisi, pakai angka/pencapaian/value proposition. Bukan bullet.]
 
 **CORE COMPETENCIES**
-[12-15 keyword ATS yang relevan dengan posisi, dipisah bullet]
+- [skill/keyword ATS 1]
+- [skill/keyword ATS 2]
+(total 8-15 item, masing-masing satu baris diawali tanda "- ")
 
 **PROFESSIONAL EXPERIENCE**
-[Untuk setiap posisi: tulis ulang dengan action verbs kuat + metrik kuantitatif. Format: VERB + WHAT + RESULT/IMPACT]
+**[Job Title] - [Nama Perusahaan]** | [Bln Thn - Bln Thn]
+- [action verb + hal yang dikerjakan + hasil/metrik]
+- [pencapaian lain]
+(ulangi blok ini untuk tiap posisi. Baris jabatan WAJIB format: **Judul - Perusahaan** | Tanggal)
 
 **EDUCATION & CERTIFICATIONS**
-[Relevan dan diframe ulang jika perlu]
+**[Nama Institusi/Penerbit]** | [Tahun]
+[Gelar/Program/Nama Sertifikat]
+(ulangi untuk tiap entri)
 
 **KEY ACHIEVEMENTS**
-[3-5 pencapaian terbaik dengan angka konkret — ini yang paling dibaca rekruter]
+- [pencapaian terbaik dengan angka konkret]
+(3-5 item)
 
 ---SECTION:CV_INDONESIA---
 
-Versi Bahasa Indonesia dari CV di atas — bukan terjemahan kaku, tapi adaptasi yang natural dan profesional sesuai konteks pasar kerja Indonesia. Tetap ATS-optimized untuk sistem lokal (JobStreet, Glints, LinkedIn Indonesia).
+Versi Bahasa Indonesia (adaptasi natural, bukan terjemahan kaku; tetap ATS-friendly untuk JobStreet/Glints/LinkedIn ID). WAJIB ikuti format baris yang sama:
 
-Gunakan struktur yang sama dengan CV English tapi dengan:
-- Diksi profesional Indonesia yang modern (hindari kalimat baku yang kaku)
-- Konteks dan referensi yang relevan untuk rekruter Indonesia
-- Keyword industri dalam Bahasa Indonesia yang umum digunakan HRD lokal
+# [Nama Lengkap Kandidat]
+[Nomor Telepon] | [Email] | [Kota/Lokasi]
+
+**RINGKASAN PROFESIONAL**
+[paragraf 3-4 kalimat, diksi profesional Indonesia yang modern]
+
+**KOMPETENSI INTI**
+- [skill/keyword 1]
+- [skill/keyword 2]
+(8-15 item, masing-masing satu baris diawali "- ")
+
+**PENGALAMAN KERJA**
+**[Jabatan] - [Nama Perusahaan]** | [Bln Thn - Bln Thn]
+- [kata kerja aksi + hasil + metrik]
+- [pencapaian lain]
+(ulangi tiap posisi. Baris jabatan WAJIB format: **Jabatan - Perusahaan** | Tanggal)
+
+**PENDIDIKAN & SERTIFIKASI**
+**[Nama Institusi]** | [Tahun]
+[Gelar/Program/Sertifikat]
+(ulangi tiap entri)
+
+**PENCAPAIAN UTAMA**
+- [pencapaian dengan angka konkret]
+(3-5 item)
 
 ---SECTION:COVER_LETTER---
 
@@ -392,7 +495,7 @@ with st.sidebar:
     st.markdown("---")
     manual_api_key = st.text_input("Gemini API Key (Fallback)", type="password")
     st.markdown("---")
-    st.caption("v5.1 · google-genai SDK · Thinking Budget · Neumorphic")
+    st.caption("v5.2 · CV PDF Rapi · google-genai · Neumorphic")
     st.success("✓ Supabase terhubung") if supabase else st.warning("⚠️ Supabase tidak terhubung")
 
 theme = "dark" if dark_mode else "light"
@@ -739,7 +842,7 @@ with col_out:
                 st.markdown(content if content else "_Section tidak terdeteksi._")
             if content:
                 c1, c2 = st.columns(2)
-                c1.download_button("📄 Download PDF", data=make_pdf("Curriculum Vitae", content),
+                c1.download_button("📄 Download PDF", data=make_cv_pdf(content),
                     file_name=f"CV_English_{company.replace(' ','_')}_{today}.pdf", mime="application/pdf")
                 c2.download_button("📝 Download TXT", data=content.encode("utf-8"),
                     file_name=f"CV_English_{company.replace(' ','_')}_{today}.txt", mime="text/plain")
@@ -751,7 +854,7 @@ with col_out:
                 st.markdown(content if content else "_Section tidak terdeteksi._")
             if content:
                 c1, c2 = st.columns(2)
-                c1.download_button("📄 Download PDF", data=make_pdf("Daftar Riwayat Hidup", content),
+                c1.download_button("📄 Download PDF", data=make_cv_pdf(content),
                     file_name=f"CV_Indonesia_{company.replace(' ','_')}_{today}.pdf", mime="application/pdf")
                 c2.download_button("📝 Download TXT", data=content.encode("utf-8"),
                     file_name=f"CV_Indonesia_{company.replace(' ','_')}_{today}.txt", mime="text/plain")
@@ -803,7 +906,7 @@ if supabase:
             df.columns = ["Waktu", "Perusahaan", "Posisi", "Status", "Cuplikan Cover Letter"]
             st.dataframe(df, use_container_width=True)
             st.download_button("📥 Export Riwayat (.csv)", data=df.to_csv(index=False).encode("utf-8"),
-                file_name=f"riwayat_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv")
+                file_name=f"riwayat_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/plain".replace("plain","csv"))
         else:
             st.info("Belum ada riwayat.")
 else:
