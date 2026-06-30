@@ -111,68 +111,126 @@ def _is_full_bold(s):
 def _is_bullet(s):
     return s.startswith("- ") or s.startswith(chr(8226)) or (s.startswith("* ") and not s.startswith("**"))
 
+def _two_col(pdf, items, epw):
+    if not items:
+        return
+    colw = epw / 2
+    half = (len(items) + 1) // 2
+    left, right = items[:half], items[half:]
+    rows = max(len(left), len(right))
+    lh = 5.5
+    pdf.set_font("Helvetica", "", 10); pdf.set_text_color(45, 45, 45)
+    x0 = pdf.l_margin
+    for r in range(rows):
+        if pdf.get_y() > (pdf.h - pdf.b_margin - lh):
+            pdf.add_page()
+        y = pdf.get_y()
+        if r < len(left):
+            pdf.set_xy(x0, y)
+            pdf.cell(4, lh, BULLET, new_x=XPos.RIGHT, new_y=YPos.TOP)
+            pdf.cell(colw - 8, lh, _latinize(left[r]), new_x=XPos.LMARGIN, new_y=YPos.TOP)
+        if r < len(right):
+            pdf.set_xy(x0 + colw, y)
+            pdf.cell(4, lh, BULLET, new_x=XPos.RIGHT, new_y=YPos.TOP)
+            pdf.cell(colw - 8, lh, _latinize(right[r]), new_x=XPos.LMARGIN, new_y=YPos.TOP)
+        pdf.set_y(y + lh)
+
 def make_cv_pdf(text: str) -> bytes:
     pdf = FPDF(format="A4")
     pdf.set_margins(16, 14, 16)
     pdf.set_auto_page_break(auto=True, margin=14)
     pdf.add_page()
     epw = pdf.epw
+    lines = text.split(NL)
+    n = len(lines)
+    i = 0
     expect_contact = False
+    prev_pipe = False  # baris sebelumnya adalah "Perusahaan | Tanggal"
 
-    for raw in text.split(NL):
-        s = raw.strip()
+    while i < n:
+        s = lines[i].strip()
+
         if s == "":
             if not expect_contact:
                 pdf.ln(2)
+            i += 1
             continue
 
         # NAMA (judul besar di tengah)
         if s.startswith("# "):
             pdf.set_font("Helvetica", "B", 24); pdf.set_text_color(20, 20, 20)
             pdf.multi_cell(0, 11, _latinize(s[2:].replace("**", "").strip()).upper(), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            expect_contact = True
+            expect_contact = True; prev_pipe = False; i += 1
             continue
 
         # KONTAK (baris tepat setelah nama)
         if expect_contact:
-            expect_contact = False
+            expect_contact = False; prev_pipe = False
             pdf.set_font("Helvetica", "", 10); pdf.set_text_color(70, 70, 70)
             for part in s.replace("**", "").split("|"):
                 if part.strip():
                     pdf.multi_cell(0, 5, _latinize(part.strip()), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            pdf.ln(1)
+            pdf.ln(1); i += 1
             continue
 
-        # BARIS JUDUL + TANGGAL (kiri/kanan, pakai pipe)
+        # BARIS NAMA PERUSAHAAN + TANGGAL (kiri/kanan, pakai pipe)
         if "|" in s:
             left, right = s.split("|", 1)
-            pdf.set_text_color(20, 20, 20); pdf.set_font("Helvetica", "B", 10.5)
-            pdf.cell(epw * 0.70, 5.5, _latinize(left.replace("**", "").replace("#", "").strip()), new_x=XPos.RIGHT, new_y=YPos.TOP)
-            pdf.cell(epw * 0.30, 5.5, _latinize(right.replace("**", "").strip()), align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.set_text_color(20, 20, 20); pdf.set_font("Helvetica", "B", 11)
+            pdf.cell(epw * 0.72, 5.5, _latinize(left.replace("**", "").replace("#", "").strip()), new_x=XPos.RIGHT, new_y=YPos.TOP)
+            pdf.cell(epw * 0.28, 5.5, _latinize(right.replace("**", "").strip()), align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            prev_pipe = True; i += 1
             continue
 
         # HEADER SECTION (full bold, di tengah + garis bawah)
         if _is_full_bold(s):
+            title = s.replace("**", "").strip()
             pdf.ln(3); pdf.set_font("Helvetica", "B", 12); pdf.set_text_color(20, 20, 20)
-            pdf.multi_cell(0, 6.5, _latinize(s.replace("**", "").strip()).upper(), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            y = pdf.get_y() + 0.5
+            pdf.multi_cell(0, 6.5, _latinize(title).upper(), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            yy = pdf.get_y() + 0.5
             pdf.set_draw_color(60, 60, 60); pdf.set_line_width(0.4)
-            pdf.line(pdf.l_margin, y, pdf.l_margin + epw, y)
-            pdf.ln(2.5)
+            pdf.line(pdf.l_margin, yy, pdf.l_margin + epw, yy)
+            pdf.ln(2.5); prev_pipe = False
+
+            # KOMPETENSI / COMPETENCIES -> render 2 kolom
+            if "OMPETEN" in title.upper():
+                items = []
+                j = i + 1
+                while j < n:
+                    t = lines[j].strip()
+                    if t == "":
+                        j += 1; continue
+                    if _is_bullet(t):
+                        items.append(t.lstrip("-* " + chr(8226)).strip()); j += 1
+                    else:
+                        break
+                _two_col(pdf, items, epw)
+                i = j
+                continue
+            i += 1
             continue
 
-        # BULLET
+        # BULLET (kolom tunggal)
         if _is_bullet(s):
             txt = s.lstrip("-* " + chr(8226)).strip()
             pdf.set_font("Helvetica", "", 10); pdf.set_text_color(45, 45, 45)
             pdf.set_x(pdf.l_margin + 2)
             pdf.cell(4, 5, BULLET, new_x=XPos.RIGHT, new_y=YPos.TOP)
             pdf.multi_cell(epw - 6, 5, _latinize(txt), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            prev_pipe = False; i += 1
+            continue
+
+        # SUBJUDUL (baris setelah pipe: Jabatan - Jenis usaha / Gelar) -> italic
+        if prev_pipe:
+            pdf.set_font("Helvetica", "I", 9.5); pdf.set_text_color(90, 90, 90)
+            pdf.multi_cell(0, 5, _latinize(s.replace("**", "")), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            prev_pipe = False; i += 1
             continue
 
         # PARAGRAF biasa
         pdf.set_font("Helvetica", "", 10); pdf.set_text_color(45, 45, 45)
         pdf.multi_cell(0, 5, _latinize(s.replace("**", "")), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        prev_pipe = False; i += 1
 
     return bytes(pdf.output())
 
@@ -287,10 +345,11 @@ Buat ATS-Optimized CV dalam Bahasa Inggris. WAJIB ikuti format baris berikut PER
 (total 8-15 item, masing-masing satu baris diawali tanda "- ")
 
 **PROFESSIONAL EXPERIENCE**
-**[Job Title] - [Nama Perusahaan]** | [Bln Thn - Bln Thn]
+**[Nama Perusahaan]** | [Bln Thn - Bln Thn]
+[Job Title] - [Jenis usaha/industri perusahaan]
 - [action verb + hal yang dikerjakan + hasil/metrik]
 - [pencapaian lain]
-(ulangi blok ini untuk tiap posisi. Baris jabatan WAJIB format: **Judul - Perusahaan** | Tanggal)
+(ulangi blok ini tiap posisi. Baris 1 WAJIB: **Nama Perusahaan** | Tanggal. Baris 2: Jabatan - Jenis usaha. Lalu bullet pencapaian.)
 
 **EDUCATION & CERTIFICATIONS**
 **[Nama Institusi/Penerbit]** | [Tahun]
@@ -317,10 +376,11 @@ Versi Bahasa Indonesia (adaptasi natural, bukan terjemahan kaku; tetap ATS-frien
 (8-15 item, masing-masing satu baris diawali "- ")
 
 **PENGALAMAN KERJA**
-**[Jabatan] - [Nama Perusahaan]** | [Bln Thn - Bln Thn]
+**[Nama Perusahaan]** | [Bln Thn - Bln Thn]
+[Jabatan] - [Jenis usaha/industri perusahaan]
 - [kata kerja aksi + hasil + metrik]
 - [pencapaian lain]
-(ulangi tiap posisi. Baris jabatan WAJIB format: **Jabatan - Perusahaan** | Tanggal)
+(ulangi tiap posisi. Baris 1 WAJIB: **Nama Perusahaan** | Tanggal. Baris 2: Jabatan - Jenis usaha. Lalu bullet pencapaian.)
 
 **PENDIDIKAN & SERTIFIKASI**
 **[Nama Institusi]** | [Tahun]
@@ -495,7 +555,7 @@ with st.sidebar:
     st.markdown("---")
     manual_api_key = st.text_input("Gemini API Key (Fallback)", type="password")
     st.markdown("---")
-    st.caption("v5.2 · CV PDF Rapi · google-genai · Neumorphic")
+    st.caption("v5.3 · CV PDF 2-kolom · google-genai · Neumorphic")
     st.success("✓ Supabase terhubung") if supabase else st.warning("⚠️ Supabase tidak terhubung")
 
 theme = "dark" if dark_mode else "light"
@@ -765,7 +825,7 @@ with col_out:
         <div class="neo-card empty-wrap">
             <div class="empty-icon">🪄</div>
             <p style="font-weight:700; margin:0.8rem 0 0.2rem; font-size:1.05rem;">Siap mengoptimalkan karirmu</p>
-            <p style="font-size:0.85rem; color:var(--muted);">Isi form di kiri lalu klik <b>Analisis & Optimalkan</b>.</p>
+            <p style="font-size:0.85rem; color:var(--muted);">Isi form di kiri lalu klik <b>Analisis &amp; Optimalkan</b>.</p>
             <div class="feat-row">
                 <span class="feat-chip">▪ Skor ATS</span>
                 <span class="feat-chip">🧠 Analisis HR</span>
@@ -906,7 +966,7 @@ if supabase:
             df.columns = ["Waktu", "Perusahaan", "Posisi", "Status", "Cuplikan Cover Letter"]
             st.dataframe(df, use_container_width=True)
             st.download_button("📥 Export Riwayat (.csv)", data=df.to_csv(index=False).encode("utf-8"),
-                file_name=f"riwayat_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/plain".replace("plain","csv"))
+                file_name=f"riwayat_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv")
         else:
             st.info("Belum ada riwayat.")
 else:
